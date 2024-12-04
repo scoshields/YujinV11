@@ -1,0 +1,42 @@
+-- Drop existing policies
+DROP POLICY IF EXISTS "Enable insert for sets" ON exercise_sets;
+DROP POLICY IF EXISTS "Enable read access for sets" ON exercise_sets;
+DROP POLICY IF EXISTS "Enable update for sets" ON exercise_sets;
+DROP POLICY IF EXISTS "Enable delete for sets" ON exercise_sets;
+
+-- Create new policies for exercise_sets
+CREATE POLICY "Enable insert for sets" ON exercise_sets
+  FOR INSERT WITH CHECK (
+    auth.uid() = user_id AND
+    EXISTS (
+      SELECT 1 FROM workout_exercises we
+      JOIN daily_workouts d ON we.daily_workout_id = d.id
+      WHERE we.id = exercise_id
+      AND d.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Enable read access for sets" ON exercise_sets
+  FOR SELECT USING (
+    auth.uid() = user_id OR
+    EXISTS (
+      SELECT 1 FROM workout_exercises we
+      JOIN daily_workouts d ON we.daily_workout_id = d.id
+      WHERE we.id = exercise_id
+      AND (
+        d.user_id = auth.uid() OR
+        auth.uid() = ANY(d.shared_with)
+      )
+    )
+  );
+
+CREATE POLICY "Enable update for sets" ON exercise_sets
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Enable delete for sets" ON exercise_sets
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_exercise_sets_user_id ON exercise_sets(user_id);
+CREATE INDEX IF NOT EXISTS idx_exercise_sets_exercise_id ON exercise_sets(exercise_id);
+CREATE INDEX IF NOT EXISTS idx_exercise_sets_completed ON exercise_sets(completed);
